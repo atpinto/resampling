@@ -1,0 +1,369 @@
+---
+title: "Cross-validation"
+author: "Armando Teixeira-Pinto"
+date:  "`r Sys.Date()`"
+output: 
+  html_document
+
+---
+
+
+# Cross-validation
+
+  When assessing the performance of a model in the same data that was used to 
+  fit the model, we will be overestimating the model performance. A better 
+  strategy is to initially split the data and use one part to fit the model and
+  the other one to test it. In machine learning terminology the data used to fit
+  the model is called the **training data** and the data used to assess the model 
+  performance is called **testing data**.
+  
+  The cross-validation is a repetition of the process above but each time we 
+  use a different split of the data. This will result in several measures of
+  performance obtained in each split combination. The final performance 
+  statistics is obtained by averaging all results of the different splits.
+  
+ 
+  
+  
+ <iframe width="560" height="315" src="https://www.youtube.com/embed/QrcYxR5fd-w" 
+ frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; 
+ picture-in-picture" allowfullscreen></iframe>
+
+## Readings
+
+Read the following chapter of *An introduction to statistical learning*: 
+
+* 5.1 Cross-validation
+
+
+## Practical session
+
+
+### Task 1 - Cross-validated MSE and R^2 {-}
+
+We will be using the 
+[bmd.csv](https://www.dropbox.com/s/7wjsfdaf0wt2kg2/bmd.csv?dl=1) 
+dataset to fit a linear model for *bmd* using *age*, *sex* and *bmi*, 
+and compute the cross-validated MSE and $R^2$.
+We will fit the model with main effects using 10 times a 5-fold cross-validation. 
+
+We will use the tools from the **caret** package. 
+This is a powerful package that wraps several methods for regression and 
+classification: [manual](http://topepo.github.io/caret/index.html)
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/1FuZCTjNPDU" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; 
+picture-in-picture" allowfullscreen></iframe>
+
+
+
+```{r message = FALSE }
+library(caret) #library for Machine Learning
+library(boot)  #library for bootstrap
+library(pROC)  #library for the ROC curve
+library(Rmisc) #CI() function to compute the conf interval for the mean
+set.seed(1974)
+#the option stringsAsFactors = TRUE in the command below converts 
+#string variables as sex into factor variables
+bmd.data <- read.csv("https://www.dropbox.com/s/c6mhgatkotuze8o/bmd.csv?dl=1", 
+                     stringsAsFactors = TRUE)
+#computes the BMI
+bmd.data$bmi <- bmd.data$weight_kg / (bmd.data$height_cm/100)^2
+```
+
+
+```{r}
+trC.lm <- trainControl(                  #defines the CV procedure
+                 method = "repeatedcv",  #multiple CV
+                 number = 5,            #5-fold CV
+                 repeats = 10)          #repeats the cross validation 10 times
+
+#fits the linear model with CV defined above
+model.lm <- train(bmd ~ age + sex + bmi, 
+                data = bmd.data, 
+                method = "lm", 
+                trControl = trC.lm)
+
+model.lm
+summary(model.lm$finalModel)
+```
+
+**TRY IT YOURSELF:**
+
+1) Refit the same model and evaluate the MSE and $R^2$ using leave one out (**method = "LOOCV"**)
+
+<details><summary>*See the solution code*</summary>
+
+```{r results="hide"}
+trC.lm.loocv <- trainControl(  
+                 method = "LOOCV") # leave on out CV
+                   
+model.lm2 <- train(bmd ~ age + sex + bmi, 
+                data = bmd.data, method = "lm",
+                trControl = trC.lm.loocv)
+
+model.lm2
+summary(model.lm2$finalModel)
+```
+
+</details><p><p>  
+
+2)  Fit a k nearest neighbour regression for BMD using AGE, SEX and BMI, and choose the k (number of neighbours) by 10-fold cross-validation repeated 10 times. Also, obtain the MSE and  $R^2$
+
+<details><summary>*See the solution code*</summary>
+
+```{r results="hide"} 
+trC.knn <- trainControl(    
+                 method = "repeatedcv", # multiple CV
+                 number = 10,  #10-fold CV
+                 repeats = 10)
+
+model.knn <- train(bmd ~ age + sex + bmi, 
+                data = bmd.data, method = "knn",
+                trControl = trC.knn,
+                tuneLength = 20)
+
+# Model Summary
+model.knn
+model.knn$results
+
+#results in each cv-fold
+model.knn$resample
+plot(model.knn)
+
+```
+</details><p><p>  
+
+### TASK 2 - ROC cross-validation {-}
+
+We want to fit the following model **logit(fracture) ~ age + sex + bmi +bmd** 
+and assess its performance by computing the area under the ROC curve 
+using cross-validation
+
+```{r}
+#caret does not like the category "no fracture"
+#because of the space
+#We are creating a new label for the categories
+bmd.data$fract <- ifelse (bmd.data$fracture =="fracture", "F", "NF")
+bmd.data$fract <- as.factor(bmd.data$fract)
+
+trC <- trainControl(
+            method = "cv",     #just 1 CV
+            number = 10,       #10-fold CV
+            classProbs = TRUE,
+            summaryFunction = twoClassSummary,
+            savePred =TRUE)  #to be used in the confusion matrix
+
+model.LR <- train(fract ~ age + sex + bmi + bmd , 
+                data = bmd.data, method = "glm",
+                family="binomial",
+                trControl = trC,
+                metric = "ROC")
+
+
+# Model Summary
+model.LR
+model.LR$results
+
+#results in each cv-fold
+model.LR$resample
+
+#Confusion matrix cross-validated
+confusionMatrix(model.LR)
+
+#Confusion matrix for the final model
+pred.LR  <- predict(model.LR)
+confusionMatrix(data=pred.LR, reference=bmd.data$fract)
+
+```
+
+**TRY IT YOURSELF**
+
+1) Use the KNN algorithm to predict **fracture** based on the same variables of the logistic model above, by choosing the *k* using cross-validation and compute the area under the ROC.
+
+
+```{r echo=FALSE}
+trC.knn <- trainControl(
+            method = "cv",     #just 1 CV
+            number = 10,       #10-fold CV
+            classProbs = TRUE,
+            summaryFunction = twoClassSummary,
+            savePred =TRUE)  #to be used in the confusion matrix
+
+model.knn <- train(fract ~ age + sex + bmi + bmd , 
+                data = bmd.data, method = "knn",
+                trControl = trC.knn,
+                tuneLength = 20,
+                metric = "ROC")
+
+
+# Model Summary
+model.knn
+plot(model.knn)
+model.knn$results
+
+#results in each cv-fold
+model.knn$resample
+
+#Confusion matrix cross-validated
+confusionMatrix(model.knn)
+
+#Confusion matrix for the final model
+pred.knn  <- predict(model.knn)
+confusionMatrix(data=pred.knn, reference=bmd.data$fract)
+
+```
+
+
+
+### TASK 3 - Classification
+
+Read the dataset **SBI.csv** in and create a prediction model for the outcome "sbi" using "age", "pct", "crp", "wcc" and "fever_hours" as predictors 
+Let's first read the data in
+```{r}
+sbi.data     <- 
+  read.csv("https://www.dropbox.com/s/wg32uj43fsy9yvd/SBI.csv?dl=1", 
+           stringsAsFactors = TRUE)
+summary(sbi.data)
+```
+
+We will try different approaches starting with linear discriminant analysis
+
+```{r}
+trCtrl.lda <- trainControl(method = "repeatedcv",
+                           number = 10,  #10-fold CV
+                           repeats = 10,
+                           classProbs = TRUE,
+                           savePredictions = TRUE)
+model.lda <- train(sbi ~ crp+pct+age+wcc+fever_hours, 
+                   data=sbi.data, 
+                   method="lda",
+                   trControl = trCtrl.lda,
+                   metric="Accuracy" )
+
+model.lda$results
+confusionMatrix(predict(model.lda), sbi.data$sbi)
+```
+
+Now, let's try logistic regression
+```{r}
+trCtrl.lr <- trainControl(method = "repeatedcv",
+                           number = 10,  #10-fold CV
+                           repeats = 10,
+                           classProbs = TRUE,
+                           savePredictions = TRUE)
+model.lr <- train(sbi ~ crp+pct+age+wcc+fever_hours, 
+                   data=sbi.data, 
+                   method="multinom",
+                   trControl = trCtrl.lr,
+                   tuneLength=1)
+
+model.lr$results
+confusionMatrix(predict(model.lr), sbi.data$sbi)
+```
+
+And finally, knn.
+
+```{r}
+trCtrl.knn <- trainControl(method = "repeatedcv",
+                           number = 10,  #10-fold CV
+                           repeats = 10,
+                           classProbs = TRUE,
+                           savePredictions = TRUE)
+model.knn <- train(sbi ~ crp+pct+age+wcc+fever_hours, 
+                   data=sbi.data, 
+                   method="knn",
+                   trControl = trCtrl.knn,
+                   tuneLength=20)
+
+plot(model.knn)
+model.knn
+confusionMatrix(predict(model.knn), sbi.data$sbi)
+```
+
+
+
+
+
+
+## Exercises
+
+Solve the following exercises:
+
+The diabetes data were provided by Hastie and Tibshirani (1990, p. 6). 
+The observations arise from a study of the factors affecting patterns of 
+insulin-dependent diabetes mellitus in 43 children (Sockett et al., 1987). 
+The aim was to investigate the dependence of serum C-peptide on other factors, 
+better to understand the patterns of residual insulin secretion. 
+
+The response, *cpep*, is the log of C-peptide concentration at diagnosis, and 
+the selected covariates are *age*, the child’s age at diagnosis, and *base*, 
+minus their base deficit. Base deficit is a measure of acidity. 
+
+**1) Calculate the Pearson correlation coefficient between *cpep* and *base* with
+the respective 95% confidence interval obtained by the [Fisher's 
+z-transformation](https://en.wikipedia.org/wiki/Fisher_transformation) (the 
+usual way of getting the confidence interval for the Pearson's correlation)**
+
+*Note: you can use the function CIr in the "psychometric" package*
+
+**2) Write your own function to compute the 95% confidence interval 
+for the above correlation, using bootstrap.**
+
+**3) Use the function *boot()* from the *boot* package to compute 
+the 95% confidence interval through bootstrap**
+
+**4) Plot the histogram with the correlations obtained in 
+the bootstrap samples.**
+ 
+<details><summary>*See the solution code*</summary>
+
+```{r boostrapexercise, results="hide", message=FALSE}
+#install.packages("psychometric") # install package with function for
+                                 # the correlation confidence interval
+#install.packages("boot")         # install package for bootstrap function
+library(boot)
+library(psychometric) 
+set.seed(1001)
+myData <- read.csv("https://www.dropbox.com/s/6rc00ealjtyp3qi/diabetes.csv?dl=1")
+
+sample.size <- dim(myData)[1] #nr of observations
+
+#1 - the Person correlation
+  cor(myData$base, myData$cpep)
+  CIr( r = cor(myData$base, myData$cpep),   #conf interval using
+       n = sample.size, level = .95)        # Fisher's z-transformations
+
+#2 - Bootstrap
+  n.boot   <- 25000  #choose how many bootstraps
+  cor.boot <- NULL # to store the bootstrap correlations
+  
+  #manually implementing bootstrap
+  for (i in 1:n.boot) {
+    id.bs <- sample.int(sample.size,   #bootstrap the
+                        sample.size,   #original sample
+                        replace = TRUE)
+    cor.boot[i] <- cor(myData[id.bs, ])[2,3]  #Compute correlation
+                                              #between
+   }
+   quantile(cor.boot, c(0.025, 0.975))  #95% confidence interval
+  
+#3 - Using the boot() function
+  sample.corr <- function(data, d) {  
+    return(cor(data$base[d], data$cpep[d]))   #d is the index for the bootstrap
+  }
+    
+  bootcorr <- boot(myData, 
+                   statistic=sample.corr, 
+                   R=n.boot)
+  # get 95% confidence interval 
+  boot.ci(bootcorr, type="perc")
+
+#4 - Histogram
+  #the correlations for the bootstrap samples
+  #are stored in bootcorr$t
+  hist(bootcorr$t)
+  
+  #or 
+  #hist(cor.boot)
+```
+</details>  

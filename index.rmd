@@ -1,0 +1,60 @@
+--- 
+title: "Resampling methods"
+author: "Armando Teixeira-Pinto"
+date: "`r Sys.Date()`"
+site: "bookdown::bookdown_site"
+output:
+  bookdown::gitbook: default
+documentclass: book
+#bibliography: ["book.bib", "packages.bib"]
+#biblio-style: apalike
+link-citations: yes
+
+---
+
+
+
+# Resampling methods {-}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+This module will cover **bootstrap** and **cross-validation**. These are two 
+important techniques that are useful to study sample variability, evaluate 
+model performance and choosing *tuning* parameters in many of the methods
+covered in this unit.
+
+We will switch the order presented in the book *Introduction to Statistical 
+Learning* and start with bootrap and then proceed to cross-validation.
+
+
+By the end of this module you should be able to:
+
+1. Be able to compute standard errors for different statistics
+through bootstrapping
+2. Compute model performance statistics by cross-validation
+3. Use cross-validation to select *tuning* parameters such
+as the number of neighbours in KNN 
+
+
+
+##     Dataset used in the examples {-}  
+The file [bmd.csv](https://www.dropbox.com/s/7wjsfdaf0wt2kg2/bmd.csv?dl=1) 
+contains 169 records of bone densitometries (measurement of 
+bone mineral density). The following variables were collected:
+
+* id – patient’s number  
+* age – patient’s age
+* fracture – hip fracture (fracture / no fracture)
+* weight_kg – weight measured in Kg
+* height_cm – height measure in cm   
+* waiting_time – time the patient had to wait for the densitometry (in minutes)
+* bmd – bone mineral density measure in the hip
+
+
+
+You can download the slides used in the videos for resampling methods:
+
+LINKS
